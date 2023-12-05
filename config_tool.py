@@ -1,12 +1,16 @@
 import configparser
 import os, sys
 
+
 class ConfigTool:
     def __init__(self):
         # 获取程序所在目录的路径
-        self.dir_path = os.path.dirname(os.path.realpath(sys.argv[0]))
+        self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.config = configparser.ConfigParser()
-        self.config.read(self.dir_path+'/config.ini', encoding = 'utf-8')
+        #拼接配置文件路径
+        self.config_path = os.path.join(self.dir_path,"config.ini")
+        #d读取配置文件
+        self.config.read(self.config_path, encoding = 'utf-8')
 
 
     #从配置文件获取发信者的信息
@@ -25,3 +29,32 @@ class ConfigTool:
     def get_time_gap(self):
         time_gap = self.config.get("stage_info","time_gap")
         return time_gap
+
+    #读取配置文件中stmp邮件服务器相关信息
+    def read_email_info_config(self):
+        #print(self.config_path)
+        if not os.path.exists(self.config_path):
+            #self.write()
+            #return 
+            print("配置文件不存在")
+            return False
+        else:
+            server = self.config.get('stmp_info','server')
+            port = self.config.get('stmp_info','port')
+            username = self.config.get('stmp_info','username')
+            password = self.config.get('stmp_info','password')
+            if server and port and username and password:
+                return server, port, username, password
+            else:
+                print("邮件信息读取错误")
+                return False
+    
+    #读取配置文件中的数据库名和表名信息
+    def read_config_database(self):
+        if not os.path.exists(self.config_path):
+            return False
+        else:
+            self.config.read(self.config_path, encoding = 'utf-8')
+            db_name = self.config.get('database','db_name')
+            table_name = self.config.get('database', 'table_name').split(',')
+            return db_name, table_name

@@ -1,77 +1,136 @@
-import os
-import sqlite3
-import json
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QTableWidget, QPushButton
-from datetime import datetime
+import time
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QApplication, QWidget, QPlainTextEdit, QPushButton, QHBoxLayout ,QVBoxLayout, QTextEdit
+import sys, time, os
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0,parentdir)
+from main_logic import Main 
+from config_tool import ConfigTool
+from .worker_module import  Worker
+
 
 class TabHome(QWidget):
-    def __init__(self, parent=None):
-        super(TabHome, self).__init__(parent)
-        self.setWindowTitle("客户邮件管理")
+    def __init__(self):
+        super().__init__()
+        self.worker = None
+        self.main = Main()
+        self.initUI()
+        self.status = "开始"  # 默认状态为开始
+        self.init_info_text_edit()
 
-       # 创建网格布局
-        layout = QGridLayout()
+    @pyqtSlot(str)
+    def updateTextEdit(self, text):  # Define a slot that updates the QTextEdit
+        self.info_text_edit.appendPlainText(text)
 
-        # 创建四个区域，每个区域对应一个功能
-        self.customer_overview = QLabel()
-        self.email_overview = QLabel()
-        self.sender_overview = QLabel()
-        self.function_area = QPushButton("开始发送邮件")
+    def initUI(self):
+        self.info_text_edit = QPlainTextEdit(self)  # Create a QTextEdit instance
 
-        # 将这些控件添加到布局中
-        layout.addWidget(QLabel("客户信息总览"), 0, 0)
-        layout.addWidget(self.customer_overview, 1, 0)
-        layout.addWidget(QLabel("邮件信息总览"), 0, 1)
-        layout.addWidget(self.email_overview, 1, 1)
-        layout.addWidget(QLabel("发件信息总览"), 2, 0)
-        layout.addWidget(self.sender_overview, 3, 0)
-        layout.addWidget(QLabel("功能区"), 2, 1)
-        layout.addWidget(self.function_area, 3, 1)
+        self.start_button = QPushButton('开始')
+        self.start_button.clicked.connect(self.buttonClicked)
 
-        # 设置窗口的布局
+        '''
+        self.pause_button = QPushButton('暂停')
+        self.pause_button.clicked.connect(self.pause_work)
+
+        self.resume_button = QPushButton('继续')
+        self.resume_button.clicked.connect(self.resume_work)
+        '''
+
+        self.stop_button = QPushButton('停止')
+        self.stop_button.clicked.connect(self.stop_work)
+
+        layout = QVBoxLayout()
+        toolBar = QHBoxLayout()
+        toolBar.addWidget(self.start_button)
+        #toolBar.addWidget(self.pause_button)
+        #toolBar.addWidget(self.resume_button)
+        toolBar.addWidget(self.stop_button)
+        layout.addWidget(self.info_text_edit)
+        layout.addLayout(toolBar)
         self.setLayout(layout)
+        
+    #初始化文本框中显示的内容   
+    def init_info_text_edit(self):
+        configTool = ConfigTool() 
+        file_path = os.path.join(configTool.dir_path,"readme.html")
+        if not self.check_first_time():
+            self.info_text_edit.appendPlainText("\r欢迎使用智能邮件系统！\r\r")
+        elif os.path.exists(file_path):
+            self.info_text_edit.appendHtml(self.read_html_file(file_path))
+        else:
+            self.info_text_edit.appendPlainText("\r欢迎第一次使用智能邮件系统！\r\r检测到使用手册文件丢失")
+    
+    # 读取 HTML 文件内容
+    def read_html_file(self, file_path):
+        with open(file_path, 'r', encoding='utf-8') as file:
+            html_text = file.read()
+        return html_text    
 
-        # 连接到数据库并获取数据
-        self.data = self.get_data_from_db()
+    
+    def check_first_time(self):
+        configTool = ConfigTool() 
+        file_path = os.path.join(configTool.dir_path,"config.ini")
+        if os.path.exists(file_path):
+            # 如果文件存在，则说明软件已经被使用过了
+            return False
+        else:
+            # 如果文件不存在，则说明软件是第一次使用
+            # 创建一个空的使用信息文件
+            with open(file_path, 'w') as f:
+                f.write("[stmp_info]\nserver = example\nport = example\nusername = example\npassword = example\n\n[imap_info]\nserver = example\nport = example\nusername = example\npassword = example\n\n[database]\ndb_name = example\ntable_name = example\n\n[schedule]\nschedule = example\n\n[stage_info]\ntime_gap = example\n\n[user_info]\nusername = example\nposition = example\ncompany = example\ncustomize_variable = \{\"0\":\{\"subject\":\"example\",\"username\":\"example\",\"company\":\"example\",\"position\":\"example\"}}\n")
+            return True
+    
 
-        # 根据获取的数据更新界面
-        self.update_ui()
+    def buttonClicked(self):
+        if self.status == "开始":
+            self.start_work()
+            if self.worker.working:
+                # 执行开始操作
+                print("开始")
+                self.status = "暂停"
+                self.start_button.setText("暂停")
+        elif self.status == "暂停":
+            self.pause_work()
+            # 执行暂停操作
+            print("暂停")
+            self.status = "继续"
+            self.start_button.setText("继续")
+        elif self.status == "继续":
+            self.resume_work()
+            # 执行继续操作
+            print("继续")
+            self.status = "暂停"
+            self.start_button.setText("暂停")
 
-    def get_data_from_db(self):
-        # 获取数据库的路径
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'your_database_name.db')
 
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+    def start_work(self):
+        try:
+            self.worker = Worker(self.main.work_start)
+            self.worker.signal.connect(self.appendPlainText_text)
+            self.worker.start()
+            #self.info_text_edit.appendPlainText("\n点击了开始")
+        except Exception as e:
+            info_text_edit.appendPlainText(str(e))
+    
+    def pause_work(self):
+        if self.worker is not None:
+            self.worker.pause()
+            #self.info_text_edit.appendPlainText("\n点击了暂止")
 
-        # 获取所有表名
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = cursor.fetchall()
+    def resume_work(self):
+        if self.worker is not None:
+            self.worker.resume()
+            #self.info_text_edit.appendPlainText("\n点击了继续")
 
-        data = {}
-        for table in tables:
-            if table[0] == 'sqlite_sequence':
-                continue
-            cursor.execute(f'SELECT * FROM {table[0]}')
-            data[table[0]] = cursor.fetchall()
+    def stop_work(self):
+        self.status = "开始"
+        self.start_button.setText("开始")
+        if self.worker is not None:
+            self.worker.stop()
+            self.worker = None
+            #self.info_text_edit.appendPlainText("\n点击了停止")
 
-        conn.close()
-        return data
+        
 
-    def update_ui(self):
-        # 在这里根据获取的数据更新界面
-        total_send_times = 0
-        country_send_times = {}
-        for country, rows in self.data.items():
-            send_times = sum(json.loads(row[2])['send']['send_times'] for row in rows)
-            total_send_times += send_times
-            country_send_times[country] = send_times
-
-        self.email_overview.setText(f'总共发送了 {total_send_times} 次邮件\n' + '\n'.join(f'{country}: {times}' for country, times in country_send_times.items()))
-
-        latest_send_time = max((json.loads(row[2])['send']['last_send_date'] for country, rows in self.data.items() for row in rows if 'last_send_date' in json.loads(row[2])['send']), default=None)
-        due_emails_count = sum(1 for country, rows in self.data.items() for row in rows if json.loads(row[2])['send']['next_send_date'] < datetime.now().isoformat())
-        total_receive_times = sum(json.loads(row[2])['receive']['receive_times'] for country, rows in self.data.items() for row in rows)
-        country_receive_times = {country: sum(json.loads(row[2])['receive']['receive_times'] for row in rows) for country, rows in self.data.items()}
-
-        self.sender_overview.setText(f'最近邮件发送时间：{latest_send_time}\n已到发送时间的邮件数量：{due_emails_count}\n总共收到邮件数量：{total_receive_times}\n' + '\n'.join(f'{country}: {times}' for country, times in country_receive_times.items()))
+    def appendPlainText_text(self, text):
+        self.info_text_edit.appendPlainText(text)

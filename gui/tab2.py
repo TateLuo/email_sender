@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QFileDialog, QMessageBox, QComboBox, QColorDialog, QListWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QMenu, QAction, QListWidgetItem, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QFileDialog, QMessageBox, QComboBox, QColorDialog, QListWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 from bs4 import BeautifulSoup
 import sys,re, os
+from config_tool import ConfigTool
 
 class Tab2(QWidget):
     def __init__(self):
@@ -56,6 +57,9 @@ class Tab2(QWidget):
         # 获取主目录（也就是当前目录的上一级目录）
         main_directory = os.path.dirname(current_path)
         templates_dir = os.path.join(main_directory, 'templates')
+        
+        if not os.path.exists(templates_dir):
+            os.makedirs(templates_dir)
         html_files = [f for f in os.listdir(templates_dir) if f.endswith('.html')]
         # 将HTML文件添加到列表中
         self.fileListWidget.addItems(html_files)
@@ -66,8 +70,15 @@ class Tab2(QWidget):
         self.textEdit.textChanged.connect(self.textChanged)  # 连接textChanged信号到槽
         # 将列表添加到布局中
         self.main_layout.addWidget(self.fileListWidget)
+        self.fileListWidget.sortItems()#列表排序
         self.main_layout.addLayout(self.layout)
         self.setLayout(self.main_layout)
+        
+        #绑定槽-鼠标右键单击列表item
+        #右键菜单
+        self.fileListWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.fileListWidget.customContextMenuRequested.connect(self.myListWidgetContext)
+
     
     # 当文本发生改变时，设置标志为True   
     def textChanged(self):
@@ -101,8 +112,12 @@ class Tab2(QWidget):
                 print(f'内容已保存到文件：{self.fileName}')  
             self.isTextChanged = False  # 保存文件后，重置标志为False
         elif self.isTextChanged:
+            #没选择任何文件但编辑了内容想保存的的情况
+            #设置默认保存路径
+            configTool = ConfigTool() 
+            file_path = os.path.join(configTool.dir_path,"templates/请将文件名修改为数字")
             options = QFileDialog.Options()
-            fileName, _ = QFileDialog.getSaveFileName(self,"保存文件","","HTMLFiles(*.html)",options=options)
+            fileName, _ = QFileDialog.getSaveFileName(self,"NEW File",file_path,"HTMLFiles(*.html)",options=options)
             if fileName:
                 self.fileName = fileName
                 htmlContent = self.textEdit.toHtml()
@@ -131,6 +146,8 @@ class Tab2(QWidget):
         self.fileName = os.path.join(main_directory, 'templates', item.text())
         self.openFile()
     
+    ###########
+    #富文本编辑器功能
     #修改文字大小
     def changeFontSize(self, size):
         self.textEdit.setFontPointSize(float(size))
@@ -192,4 +209,131 @@ class Tab2(QWidget):
             self.alignRightButton.setStyleSheet("font: normal;")
             self.alignLeftButton.setStyleSheet("font: normal;")
         elif alignment & Qt.AlignJustify:
-            print('文字是两端对齐的')
+            print('文字是两端对齐的')    
+    #富文本编辑器功能        
+    ###########
+    
+    #创建新模板
+    def set_new_template(self, template_name, htmlContent):
+        configTool = ConfigTool() 
+        file_path = os.path.join(configTool.dir_path,"templates\\")
+        fileName =  os.path.join(file_path, template_name)
+        if fileName:
+            self.fileName = fileName
+            htmlContent = self.textEdit.toHtml()
+            # Use regular expressions to remove the bold tags and add comments back to the content
+            htmlContent = re.sub(r'{{(.*?)}}', lambda match: '<!-- {} -->{}<!-- /{} -->'.format(match.group(1).upper(), match.group(1), match.group(1).upper()), htmlContent)
+            try:
+                with open(self.fileName, 'w', encoding='utf-8') as f:
+                    f.write(htmlContent)
+                print(f'内容已保存到文件：{self.fileName}')
+                return True
+            except Exception as e:
+                print(str(e))
+                return False
+            
+        else:
+            print('文件路径不能为空')
+            return False
+    
+    #取出列表item中最大的数字
+    def get_max_num_from_listwidget(self,list_widget):
+        max_num = 0
+        for i in range(list_widget.count()):
+            item_text = list_widget.item(i).text()
+            match = re.search(r'\d+', item_text)
+            if match:
+                num = int(match.group())
+                if num > max_num:
+                    max_num = num
+        return max_num
+
+    def sort_by_number(self, item):
+        match = re.search(r'\d+', item.text())
+        if match:
+            return int(match.group())
+        return item.text()
+    
+    #设置右键单击后的弹出列表
+    def myListWidgetContext(self,position):
+        #弹出菜单
+        popMenu = QMenu()
+        creAct =QAction("新建模板",self)
+        delAct =QAction("删除模板",self)
+        renameAct =QAction(u'重命名', self)
+        #查看右键时是否在item上面,如果不在.就不显示删除和修改.
+        popMenu.addAction(creAct)
+        if self.fileListWidget.itemAt(position):
+            popMenu.addAction(delAct)
+            popMenu.addAction(renameAct)
+
+        creAct.triggered.connect(self.CreateNewItem)
+        renameAct.triggered.connect(self.RenameItem)
+        delAct.triggered.connect(self.DeleteItem)
+        popMenu.exec_(self.fileListWidget.mapToGlobal(position))
+
+    #创建新的item(同时创建对应的html模板文件)
+    def CreateNewItem(self):
+        last_item_num = self.get_max_num_from_listwidget(self.fileListWidget)
+        item_name = str(last_item_num+1) + ".html"
+    	#创建一个没有名字的item
+        item =QListWidgetItem()
+        #item.setTextAlignment(Qt.AlignCenter)
+        #使得item是可以编辑的.
+        #item.setFlags(item.flags() | Qt.ItemIsEditable)
+        item.setText(item_name)
+        self.fileListWidget.addItem(item)
+        #item.setData(Qt.UserRole + 1, self.get_max_num_from_listwidget(self.fileListWidget)-1)
+        #创建后就可以编辑item,用户自己起名字.
+        #self.fileListWidget.editItem(item)
+        self.set_new_template(item_name, "")              
+        # 重新排序列表
+        # 排序项
+        self.fileListWidget.sortItems(Qt.AscendingOrder)
+
+        
+
+    #删除分组
+    def DeleteItem(self):
+        curRow =self.fileListWidget.currentRow()
+        item=self.fileListWidget.item(curRow)
+        reply = QMessageBox.question(self, '提示', '确认要删除吗?',
+        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            self.fileListWidget.takeItem(self.fileListWidget.currentRow())
+            configTool = ConfigTool()
+            item_name = item.text()
+            print(item_name)
+            item_path = os.path.join(configTool.dir_path,"templates/" + item_name)
+            try:
+                os.remove(item_path)
+            except Exception as e:
+                print("删除item错误！" + str(e))
+
+        else:
+            pass
+
+    #重命名分组
+    def RenameItem(self):
+        curRow =self.fileListWidget.currentRow()
+        item=self.fileListWidget.item(curRow)
+        item.setFlags(item.flags() | Qt.ItemIsEditable)
+        #将旧名字储存到UserRole
+        item.setData(Qt.UserRole, item.text())
+        self.fileListWidget.editItem(item)
+        self.fileListWidget.itemChanged.connect(lambda :self.ChangeItem(item))
+    
+    def ChangeItem(self,item):
+        configTool = ConfigTool() 
+        newName = str(item.text())
+        newName_path = os.path.join(configTool.dir_path,"templates\\" + newName)
+        print(newName)
+        oldName = str(item.data(Qt.UserRole))
+        oldName_path = os.path.join(configTool.dir_path,"templates\\" + oldName)
+         # 获取旧文件名
+        #print(item.data(Qt.UserRole))
+        # 只允许字母、数字和下划线
+            # 执行重命名操作
+        os.rename(oldName_path, newName_path)  # 修改对应的文件名
+        item.setData(Qt.UserRole, newName)  # 更新列表项的数据

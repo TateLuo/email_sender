@@ -7,6 +7,7 @@ import logging
 from check_stage import get_email_template, get_send_time_gap
 import datetime
 import time
+from config_tool import ConfigTool
 
 
 class Start_send:
@@ -14,6 +15,7 @@ class Start_send:
         self.init_log() #初始化日志工具
         self.init_email_info() #初始化发件邮箱配置
         self.init_other()
+        self.configTool = ConfigTool()
 
     #初始化一些其他的变量
     def init_other(self):
@@ -37,7 +39,9 @@ class Start_send:
     
     #初始化发件邮箱配置
     def init_email_info(self):
-        email_server_info = self.read_email_info_config()
+        configTool = ConfigTool()
+        email_server_info = configTool.read_email_info_config()
+        #print(email_server_info)
         if email_server_info:
         # 设置SMTP服务器信息
             self.server = email_server_info[0]
@@ -70,10 +74,11 @@ class Start_send:
         # 关闭游标和连接
         cur.close()
         conn.close()
+        print(results)
         return results
     
     #开始发送
-    def start_send(self, db_file, table_name):
+    def start_send(self, worker, db_file, table_name):
         #读取数据库输入，参数（库名，表名）
         data = self.get_data(db_file, table_name)
         #print(data)
@@ -83,13 +88,26 @@ class Start_send:
         #row[2] email_info
         #row[3] contacts
         #row[4] email_status
+        pause_printed = False
         for row in data:
+            if not worker.working:
+                worker.signal.emit(f'\r已停止发送{table_name}')
+                break
+            while worker.paused:
+                if not pause_printed:
+                    worker.signal.emit(f'\r\t暂停中')
+                    pause_printed = True
+                worker.msleep(100)
+            
+            pause_printed = False  # Reset the flag for the next row
             #先把从数据库中的数据解析出来
             id = row[0]
             company = row[1]
             email_info = row[2]
-            print(f'开始处理数据，序号：{id}，公司：{company}')
+            print(f'\n开始处理数据，序号：{id}，公司：{company}')
+            worker.signal.emit(f'\n开始处理数据库{table_name}，序号：{id}，公司：{company}')
             #判断email_status(row[3])是否为空，为空则初始化一下
+            print(row)
             if not row[4]:    
                 #联系人和右键状态是json数据，需要json解析
                 self.modfiy_email_status(                            
@@ -142,6 +160,7 @@ class Start_send:
                 if time_next_send_date <= time_trigger_time:
                     logging.info(f'{datetime.datetime.now()}->时间检测成功，开始尝试发送邮件!')
                     print(f'符合发送条件，开始发送')
+                    worker.signal.emit(f'符合发送条件，开始发送')
                     if not row[3]:
                     #给公邮发邮件 
                         template = get_email_template(send_times, company)
@@ -176,9 +195,12 @@ class Start_send:
                                 last_receive_date = 0)
                             logging.info(f'{datetime.datetime.now()}->邮件发送成功!，公司{company}, 收件人{email_info}')
                             print(f'发送成功,收件人{email_info}，公司{company}')
+                            worker.signal.emit(f'发送成功,收件人{email_info}，公司{company}')
                             time.sleep(90)
+                            worker.signal.emit('95秒后处理下一条数据')
                         else:
                             print("邮件发送失败！")
+                            worker.signal.emit(f'{datetime.datetime.now()}->邮件发送失败！->{status_sent}')
                             logging.info(f'{datetime.datetime.now()}->邮件发送失败！->{status_sent}')
                     else:
                         contacts = json.loads(row[3]) 
@@ -217,14 +239,20 @@ class Start_send:
                                 receiver = info['email']
                                 print(f'发送成功,收件人{receiver}，公司{company}')
                                 print(f'{90+3+2}秒后处理下一条数据')
+                                worker.signal.emit(f'发送成功,收件人{receiver}，公司{company}')
+                                worker.signal.emit(f'{95}秒后处理下一条数据')
                                 time.sleep(90)
                             else:
-                                
                                 print("发送失败")
                                 logging.info(f'{datetime.datetime.now()}->邮件发送失败！->{status_sent}')
+                                worker.signal.emit(f'{datetime.datetime.now()}->邮件发送失败！->\t 邮件发送状态：{status_sent}')
+
                 else:
                     print("未到预计发送时间！")
-        time.sleep(3)
+                    worker.signal.emit("未到预计发送时间！")
+
+            time.sleep(3)
+
         
 
     #判断下email_status中的switch的开关状态
@@ -234,7 +262,7 @@ class Start_send:
             return switch
         else:
             return False
-
+    '''
     #读取配置文件中邮件服务器相关信息
     def read_email_info_config(self):
         if not os.path.exists('config.ini'):
@@ -252,7 +280,9 @@ class Start_send:
             if server and port and username and password:
                 return server, port, username, password
             else:
+                print("邮件信息读取错误")
                 return False
+    '''
 
     #更新数据库中的eamil_status字段
     def modfiy_email_status(self,
@@ -302,6 +332,6 @@ class Start_send:
 #测试用
 main = Start_send()
 db_file = 'test.db'
-table_name = 'belgium'
+table_name = 'test'
 main.start_send(db_file, table_name)
 '''
