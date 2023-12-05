@@ -4,12 +4,10 @@ import configparser, os
 class ConfigEditor(QWidget):
     def __init__(self):
         super().__init__()
-        # 获取template目录的路径
         current_path = os.path.dirname(os.path.abspath(__file__))
-        # 获取主目录（也就是当前目录的上一级目录）
-        main_directory = os.path.dirname(current_path)
+        self.main_directory = os.path.dirname(current_path)
         self.config = configparser.ConfigParser()
-        self.config.read(main_directory+'/config.ini')
+        self.config.read(self.main_directory+'/config.ini')
 
         self.initUI()
 
@@ -22,22 +20,25 @@ class ConfigEditor(QWidget):
 
         for section in self.config.sections():
             for key in self.config[section]:
-                self.labels[key] = QLabel(f'{section} - {key}', self)
-                self.lineEdits[key] = QLineEdit(self)
-                self.lineEdits[key].setText(self.config[section][key])
-                vbox.addWidget(self.labels[key])
-                vbox.addWidget(self.lineEdits[key])
-                print("遍历到了key"+key)
+                label_name = f'{section}-{key}'
+                self.labels[label_name] = QLabel(f'{section} - {key}', self)
+                self.lineEdits[label_name] = QLineEdit(self)
+                self.lineEdits[label_name].setText(self.config[section][key])
+                vbox.addWidget(self.labels[label_name])
+                vbox.addWidget(self.lineEdits[label_name])
+
         self.btn = QPushButton('Save', self)
         self.btn.clicked.connect(self.saveConfig)
         vbox.addWidget(self.btn)
+        self.setWindowTitle('编辑通用配置')  
 
     def saveConfig(self):
         reply = QMessageBox.question(self, '保存', '是否保存修改？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             for section in self.config.sections():
                 for key in self.config[section]:
-                    self.config[section][key] = self.lineEdits[key].text()
+                    label_name = f'{section}-{key}'
+                    self.config[section][key] = self.lineEdits[label_name].text()
 
-            with open('config.ini', 'w') as configfile:
+            with open(self.main_directory+'/config.ini', 'w') as configfile:
                 self.config.write(configfile)

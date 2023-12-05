@@ -1,0 +1,72 @@
+<h1>
+	Email Sender使用手册
+</h1>
+<h2>
+	欢迎首次使用Email Sender!
+</h2>
+<p>
+	<h3>
+		使用须知：
+	</h3>
+<strong>1.在设置页面导入将预存为csv格式的表格（客户数据）导入至本程序，csv表名即为群发邮件的群组名可自定义，文件表头应如下：</strong>
+	<table border="0" cellpadding="0" cellspacing="0" width="513" height="18" style="width:384.77pt;" class="ke-zeroborder">
+		<tbody>
+			<tr>
+				<td height="18" width="72">
+					company
+				</td>
+				<td width="72">
+					email_info
+				</td>
+				<td width="72">
+					name1
+				</td>
+				<td width="72">
+					position1
+				</td>
+				<td width="72">
+					email1
+				</td>
+				<td width="153">
+					其他联系人依次类推
+				</td>
+			</tr>
+		</tbody>
+	</table>
+<strong><br />
+</strong>
+</p>
+<p>
+	<strong>2.导入数据可后在设置-编辑配置文件中填写配置信息，要求如下</strong><strong>：</strong>
+</p>
+<p>
+	<em>[stmp_info]</em><br />
+<em>server = 发信(stmp)邮件服务器地址</em><br />
+<em>port = 发信(stmp)邮件服务器端口</em><br />
+<em>username = 你的邮箱地址</em><br />
+<em>password = 你的邮箱密码</em><br />
+<br />
+<em>[imap_info]</em><br />
+<em>server = 收信（imap）邮件服务器地址</em><br />
+<em>port = 收信（imap）邮件服务器端口</em><br />
+<em>username = 你的邮箱地址</em><br />
+<em>password = 你的邮箱密码</em><br />
+<br />
+<em>[database]</em><br />
+<em>db_name = 数据库名，默认为customer.db，无法更改</em><br />
+<em>table_name = 你需要发信的数据库名，即为你导入数据时的表名</em><br />
+<br />
+<em>[schedule]</em><br />
+<em>schedule = 定时发送的时间（可忽略）</em><br />
+<br />
+<em>[stage_info]</em><br />
+<em>time_gap = 每次发送邮件的间隔，本处填写的间隔数量即为对应的发信次数，同时要有对应数量的模板，模板名数字.html，从0.html开始依次类推。</em><br />
+<br />
+<em>[user_info]</em><br />
+<em>自定义的变量在邮件编辑器中以{{username}}这种形式引用</em><br />
+<em>customize_variable = {"0":{"subject":"example","username":"example","company":"example","position":"example"}}</em><br />
+	<div>
+		<br />
+	</div>
+<strong>3.配置完成后，点击开始便会依次发送，顺序按照表名-表中的顺序发送</strong>
+</p>

@@ -50,15 +50,14 @@ class Email_managment:
             print(f'邮箱地址格式验证失败——>{email}')
             return False
 
-
-
+'''
 #测试用代码        
 # 设置SMTP服务器信息
-server = ""
+server = "smtp.zoho.com"
 port = 465
-username = ""
-password = ""          
-recipient = ''
+username = "tate.luo@nhet.energy"
+password = "kWvb0yei5VkM"          
+recipient = 'jaballuo@gmial.com'
 subject = 'test' 
 body = '<html>this is a test email</html> ' 
 email_managment = Email_managment()
@@ -69,4 +68,4 @@ if result:
     print('发送成功')
 else:
     print('发送失败')
-
+'''
